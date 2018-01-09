@@ -29,8 +29,3 @@ type ETDevice struct {
 	BluetoothMAC string
 	TempReading uint8
 }
-
-// A function which will convert a value from degrees celsius to degrees fahrenheit.
-func ConvertCtoF (uint8) (c uint8) {
-	return c * 9 / 5 + 32
-}

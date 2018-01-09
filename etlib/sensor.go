@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/kidoman/embd"
+	"github.com/skynetservices/skynet/log"
 )
 
 // A function that configures and then continually checks the reading of a thermocouple sensor via SPI.  Call this as a
@@ -36,19 +37,24 @@ func MonitorTemperature(device *ETDevice) {
 
 	for {
 		dataReceived, err := spiBus.ReceiveData(3)
+		if err != nil {
+			log.Errorf("Error checking thermostat: %s", err)
+		}
 		device.Lock()
 		if err != nil {
 			device.Err = err
 		} else {
 			device.TempReading = dataReceived[0]
-			if device.BluetoothMAC != "" {
-				// We can only report the temperature once we've determined our BlueTooth MAC since we use that as a
-				// unique identifier.  It's OK to do this asynchronously.  If the call eventually fails, we simply
-				// wait until the next run to report it.
-				go ReportReading(device)
-			}
+			device.Err = nil
 		}
 		device.Unlock()
+		if err != nil && device.BluetoothMAC != "" {
+			// We can only report the temperature once we've determined our BlueTooth MAC since we use that as a
+			// unique identifier.  It's OK to do this asynchronously.  If the call eventually fails, we simply
+			// wait until the next run to report it.
+			go ReportReading(device)
+		}
+
 		time.Sleep(time.Second * 30)
 	}
 }

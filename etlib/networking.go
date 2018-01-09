@@ -24,12 +24,16 @@ import (
 	"strings"
 
 	"github.com/skynetservices/skynet/log"
+	"time"
+	"net/url"
 )
 
 const networkStatusDown = "DOWN"
 const networkStatusLocal = "LOCAL"
 const networkStatusUP = "UP"
-const serviceURL = "http://services.pcsw.us/everytherm/report?device=%s&reading=&d"
+const serviceURL = "services.pcsw.us/everytherm/v1/"
+const serviceStatusURL = serviceURL + "status"
+const reportReadingURL = serviceURL + "device/%s/report/%s"
 const ssidOff = "off/any"
 const wpaConfigFile = "/etc/wpa_supplicant/wpa_supplicant.conf"
 const wpaConfigText =
@@ -168,20 +172,34 @@ func getIPAddress() (string, error) {
 
 // Determines if we can reach hosts outside the network.
 func isServerReachable() (bool) {
-	resp, err := http.Get("https://google.com")
-	if err != nil && resp.StatusCode == http.StatusOK {
-		return true
-	} else {
-		return false
+	c := &http.Client{
+		Timeout: 15 * time.Second,
 	}
+	resp, err := c.Get(serviceStatusURL)
+	f := err != nil && resp.StatusCode == http.StatusOK
+	if resp != nil {
+		resp.Body.Close()
+	}
+	return f
 }
 
 // Makes a call to the web service to report the latest reading.
-func ReportReading(device *ETDevice) (error) {
-	resp, err := http.Post(fmt.Sprintf(serviceURL, device.BluetoothMAC, device.TempReading))
-	if err != nil && resp.StatusCode == http.StatusOK {
-		return true
+func ReportReading(device *ETDevice) {
+	v := url.Values{}
+
+	c := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := c.PostForm(
+		fmt.Sprintf(reportReadingURL,
+			url.PathEscape(device.BluetoothMAC),
+			url.PathEscape(fmt.Sprintf("%d", device.TempReading))), v)
+	if err != nil {
+		log.Errorf("Unable to report temperature to web service: %s", err)
 	} else {
-		return false
+		if resp.StatusCode != http.StatusOK {
+			log.Errorf("Error reporting temperature to web service, got response code %d", resp.StatusCode)
+		}
+		resp.Body.Close()
 	}
 }
